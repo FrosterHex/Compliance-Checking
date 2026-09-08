@@ -29,7 +29,8 @@ _OPEN = ("pending", "in_progress", "ready_for_review")
 
 
 def _effective_status(i: ObligationInstance, today: date) -> str:
-    if i.status in _OPEN and i.due_date and i.due_date < today:
+
+    if i.status in ("pending", "in_progress") and i.due_date and i.due_date < today:
         return "overdue"
     return i.status
 

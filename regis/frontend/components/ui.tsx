@@ -383,7 +383,7 @@ export function Sheet({ open, onClose, title, children, footer, tabs }: {
   if (!open) return null;
   return (
     <>
-      <div className="scrim" onClick={onClose} aria-hidden="true" />
+      
       <div className="sheet" ref={ref} role="dialog" aria-modal="true"
         aria-labelledby={titleId} tabIndex={-1}>
         <div className="sheet-head">
@@ -412,7 +412,8 @@ export function Modal({ open, onClose, title, description, children, footer, wid
   if (!open) return null;
   return (
     <div className="modal-wrap">
-      <div className="scrim" onClick={onClose} aria-hidden="true" />
+      
+      <div className="scrim" onClick={onClose} aria-hidden="true" style={{ zIndex: -1 }} />
       <div className="modal" ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined} tabIndex={-1}
         style={width ? { width: `min(${width}px, 100%)` } : undefined}>
