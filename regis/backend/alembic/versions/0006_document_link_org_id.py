@@ -17,28 +17,41 @@ depends_on = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    # Add the column (both SQLite and Postgres)
-    op.add_column("document_links", sa.Column("organization_id", sa.Uuid(), nullable=True))
-    # Backfill from parent document
-    op.execute("""
-        UPDATE document_links SET organization_id = (
-            SELECT d.organization_id FROM documents d
-            WHERE d.id = document_links.document_id
-        )
-    """)
-    if bind.dialect.name != "postgresql":
-        return
-    # Make non-nullable and add RLS
-    op.alter_column("document_links", "organization_id", nullable=False)
-    op.create_index("ix_document_links_organization_id", "document_links", ["organization_id"])
-    op.create_foreign_key("fk_document_links_org", "document_links", "organizations", ["organization_id"], ["id"])
-    op.execute("ALTER TABLE document_links ENABLE ROW LEVEL SECURITY;")
-    op.execute("ALTER TABLE document_links FORCE ROW LEVEL SECURITY;")
-    op.execute("""
-        CREATE POLICY document_links_tenant_isolation ON document_links
-        USING (organization_id::text = current_setting('app.current_org', true))
-        WITH CHECK (organization_id::text = current_setting('app.current_org', true));
-    """)
+    insp = sa.inspect(bind)
+    columns = [c["name"] for c in insp.get_columns("document_links")]
+    
+    if "organization_id" not in columns:
+        # Add the column (both SQLite and Postgres)
+        op.add_column("document_links", sa.Column("organization_id", sa.Uuid(), nullable=True))
+        # Backfill from parent document
+        op.execute("""
+            UPDATE document_links SET organization_id = (
+                SELECT d.organization_id FROM documents d
+                WHERE d.id = document_links.document_id
+            )
+        """)
+        if bind.dialect.name == "postgresql":
+            # Make non-nullable and add constraints
+            op.alter_column("document_links", "organization_id", nullable=False)
+            op.create_index("ix_document_links_organization_id", "document_links", ["organization_id"])
+            op.create_foreign_key("fk_document_links_org", "document_links", "organizations", ["organization_id"], ["id"])
+
+    if bind.dialect.name == "postgresql":
+        op.execute("ALTER TABLE document_links ENABLE ROW LEVEL SECURITY;")
+        op.execute("ALTER TABLE document_links FORCE ROW LEVEL SECURITY;")
+        op.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_policies 
+                    WHERE tablename = 'document_links' AND policyname = 'document_links_tenant_isolation'
+                ) THEN
+                    CREATE POLICY document_links_tenant_isolation ON document_links
+                    USING (organization_id::text = current_setting('app.current_org', true))
+                    WITH CHECK (organization_id::text = current_setting('app.current_org', true));
+                END IF;
+            END $$;
+        """)
 
 
 def downgrade() -> None:
